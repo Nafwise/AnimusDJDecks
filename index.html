@@ -2,143 +2,1800 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Subject 44: Initialization</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Animus DJ Decks (Standalone)</title>
+    
+    <!-- ID3 Tag Parser for Local DJ File Uploads -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.5/jsmediatags.min.js"></script>
+
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap');
+        /* --- Zero-Dependency Pure CSS --- */
+        * { box-sizing: border-box; margin: 0; padding: 0; }
         
-        body { 
-            background-color: #020617; 
-            color: #F8FAFC; 
-            font-family: 'Space Mono', monospace;
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
+        body {
+            background-color: #030014;
+            color: #f3f4f6;
+            font-family: system-ui, -apple-system, sans-serif;
             overflow: hidden;
-            text-align: center;
+            user-select: none; 
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(76, 29, 149, 0.4) 0%, transparent 50%),
+                radial-gradient(circle at 85% 30%, rgba(14, 116, 144, 0.4) 0%, transparent 50%),
+                radial-gradient(circle at 50% 80%, rgba(134, 25, 143, 0.3) 0%, transparent 50%);
         }
 
-        .glitch-wrapper { position: relative; }
-        .glitch {
-            font-size: 4rem;
-            font-weight: bold;
-            text-transform: uppercase;
-            position: relative;
-            text-shadow: 0.05em 0 0 #00fffc, -0.03em -0.04em 0 #fc00ff,
-                         0.025em 0.04em 0 #fffc00;
-            animation: glitch 725ms infinite;
+        /* Synapse Canvas Background */
+        .synapse-canvas {
+            position: absolute; 
+            inset: 0; 
+            width: 100%; 
+            height: 100%; 
+            z-index: 0; 
+            opacity: 0.6; 
+            pointer-events: none; 
         }
 
-        .scanline {
-            width: 100%;
-            height: 100px;
-            z-index: 10;
-            background: linear-gradient(0deg, rgba(0,0,0,0) 0%, rgba(34, 197, 94, 0.1) 50%, rgba(0,0,0,0) 100%);
-            opacity: 0.1;
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #d946ef; }
+
+        /* Utility Classes */
+        .truncate { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+        .text-xs { font-size: 12px; }
+        .text-sm { font-size: 14px; }
+        .font-mono { font-family: monospace; }
+        .text-gray { color: #9ca3af; transition: color 0.2s; }
+        .text-fuchsia { color: #d946ef; }
+        .text-cyan { color: #22d3ee; }
+        .text-white { color: #ffffff; }
+        .pulse { animation: pulse 2s infinite; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+
+        /* Interaction Overlay (Forces Click for Audio) */
+        .overlay-glass {
+            position: fixed; inset: 0; z-index: 9999;
+            background: rgba(3, 0, 20, 0.95); backdrop-filter: blur(10px);
+            display: flex; flex-direction: column; justify-content: center; align-items: center; cursor: pointer;
+            transition: opacity 0.5s;
+        }
+
+        /* Standalone App Container */
+        .app-container {
             position: absolute;
-            bottom: 100%;
-            animation: scanline 10s linear infinite;
-            pointer-events: none;
+            top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 95vw; max-width: 1600px; height: 95vh;
+            z-index: 20;
+            background: rgba(15, 10, 25, 0.75);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(168, 85, 247, 0.25);
+            border-radius: 16px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7), 0 0 20px rgba(168, 85, 247, 0.1);
+            display: flex; flex-direction: column;
         }
 
-        .btn-start {
-            margin-top: 40px;
-            padding: 15px 40px;
-            background: transparent;
-            border: 2px solid #22c55e;
-            color: #22c55e;
-            font-family: 'Space Mono', monospace;
-            font-size: 1.5rem;
-            font-weight: bold;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-            position: relative;
-            overflow: hidden;
+        .app-header {
+            background: rgba(88, 28, 135, 0.3);
+            padding: 12px 24px;
+            border-radius: 16px 16px 0 0;
+            border-bottom: 1px solid rgba(126, 34, 206, 0.5);
+            display: flex; justify-content: space-between; align-items: center;
         }
 
-        .btn-start:hover {
-            background: #22c55e;
-            color: #000;
-            box-shadow: 0 0 30px #22c55e;
+        /* =========================================================
+           DJ CONSOLE CSS 
+           ========================================================= */
+        .dj-console {
+            position: relative; z-index: 10; display: grid; flex-grow: 1;
+            grid-template-areas: 
+                "screen screen screen" 
+                "deckA mixer deckB" 
+                "sampler sampler sampler"
+                "crate crate crate";
+            grid-template-columns: 1fr 340px 1fr;
+            grid-template-rows: 130px auto auto minmax(150px, 1fr);
+            gap: 16px; width: 100%; overflow-y: auto; padding: 20px;
         }
 
-        @keyframes scanline {
-            0% { bottom: 100%; }
-            100% { bottom: -100%; }
+        /* Audio Reactive Paneling */
+        .dj-glass-panel {
+            background: rgba(10, 5, 20, 0.6); border: 1px solid rgba(168, 85, 247, 0.2);
+            border-radius: 12px; padding: 16px; display: flex; flex-direction: column;
+            transition: box-shadow 0.05s, border-color 0.05s; /* Snappy transition for bass pulse */
         }
 
-        @keyframes glitch {
-            0% { text-shadow: 0.05em 0 0 #00fffc, -0.03em -0.04em 0 #fc00ff, 0.025em 0.04em 0 #fffc00; }
-            15% { text-shadow: 0.05em 0 0 #00fffc, -0.03em -0.04em 0 #fc00ff, 0.025em 0.04em 0 #fffc00; }
-            16% { text-shadow: -0.05em -0.025em 0 #00fffc, 0.025em 0.035em 0 #fc00ff, -0.05em -0.05em 0 #fffc00; }
-            49% { text-shadow: -0.05em -0.025em 0 #00fffc, 0.025em 0.035em 0 #fc00ff, -0.05em -0.05em 0 #fffc00; }
-            50% { text-shadow: 0.05em 0.035em 0 #00fffc, 0.03em 0 0 #fc00ff, 0 -0.04em 0 #fffc00; }
-            99% { text-shadow: 0.05em 0.035em 0 #00fffc, 0.03em 0 0 #fc00ff, 0 -0.04em 0 #fffc00; }
-            100% { text-shadow: -0.05em 0 0 #00fffc, -0.025em -0.04em 0 #fc00ff, -0.04em -0.025em 0 #fffc00; }
+        /* Top Screen & Routing */
+        .dj-screen {
+            grid-area: screen; display: flex; flex-direction: row; gap: 20px; background: rgba(0, 0, 0, 0.6);
+            border-bottom: 2px solid rgba(217, 70, 239, 0.4); padding: 12px 20px;
+            justify-content: space-between; align-items: center; border-radius: 12px;
         }
+
+        .screen-deck { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 8px; }
+        .track-info-container { display: flex; justify-content: space-between; align-items: center; width: 100%; }
         
-        .status-log {
-            margin-top: 20px;
-            color: #64748b;
-            font-size: 0.8rem;
-            text-align: left;
-            width: 300px;
+        .screen-master-section {
+            width: 380px; display: flex; flex-direction: column; gap: 6px; position: relative; height: 100%;
         }
-        .status-line { margin-bottom: 5px; opacity: 0; animation: fadeIn 0.5s forwards; }
-        @keyframes fadeIn { to { opacity: 1; } }
+
+        .routing-container {
+            width: 100%; padding: 6px 12px; z-index: 5;
+            background: rgba(0,0,0,0.6); border-bottom: 1px solid rgba(255,255,255,0.1); border-radius: 6px 6px 0 0;
+            display: flex; flex-direction: column; gap: 4px;
+        }
+
+        .route-row { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+        .route-label { font-size: 10px; font-weight: bold; color: #9ca3af; letter-spacing: 1px; }
+
+        .device-select {
+            flex-grow: 1; background: rgba(31, 41, 55, 0.9); border: 1px solid #4b5563;
+            color: #fff; padding: 2px 4px; border-radius: 4px; font-size: 11px;
+            outline: none; cursor: pointer; max-width: 180px; text-overflow: ellipsis;
+            transition: border-color 0.2s;
+        }
+        .device-select:focus, .device-select:hover { border-color: #d946ef; }
+        
+        .visualizer-wrapper {
+            flex-grow: 1; position: relative; background: rgba(3, 0, 20, 0.8);
+            border: 1px solid rgba(34, 211, 238, 0.3); border-radius: 0 0 6px 6px; overflow: hidden;
+        }
+
+        .visualizer-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+
+        /* Decks */
+        .dj-deck { display: flex; flex-direction: column; position: relative; }
+        .deck-a { grid-area: deckA; }
+        .deck-b { grid-area: deckB; }
+
+        .deck-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+        .bpm-display { font-size: 24px; font-family: monospace; font-weight: bold; color: #fff; }
+
+        .jog-wheel-container { flex-grow: 1; display: flex; justify-content: center; align-items: center; position: relative; min-height: 200px; }
+        
+        .jog-wheel {
+            width: 180px; height: 180px; border-radius: 50%;
+            background: radial-gradient(circle, #1f2937 0%, #030014 90%);
+            border: 4px solid #374151;
+            box-shadow: inset 0 0 15px rgba(0,0,0,0.8), 0 5px 15px rgba(0,0,0,0.5);
+            display: flex; justify-content: center; align-items: center;
+            position: relative; cursor: grab;
+        }
+        .jog-wheel:active { cursor: grabbing; }
+
+        .jog-platter {
+            width: 100%; height: 100%; border-radius: 50%;
+            background: repeating-conic-gradient(from 0deg, #111 0deg 2deg, #1f2937 2deg 4deg);
+            position: absolute; animation: spin 3s linear infinite; animation-play-state: paused;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.9); border: 2px solid rgba(255,255,255,0.05);
+        }
+
+        .jog-screen {
+            width: 70px; height: 70px; border-radius: 50%; background: #000;
+            border: 2px solid #d946ef; position: absolute; z-index: 5;
+            display: flex; justify-content: center; align-items: center;
+            box-shadow: 0 0 15px rgba(217, 70, 239, 0.4); pointer-events: none; 
+        }
+        .deck-b-theme .jog-screen { border-color: #22d3ee; box-shadow: 0 0 15px rgba(34, 211, 238, 0.4); }
+
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+
+        .deck-bottom { display: flex; flex-direction: column; justify-content: space-between; margin-top: 16px; gap: 12px; }
+        .transport-controls { display: flex; gap: 16px; align-items: center; justify-content: center; width: 100%; }
+
+        .btn-transport {
+            width: 50px; height: 50px; border-radius: 50%; border: none; outline: none;
+            background: linear-gradient(135deg, #374151, #1f2937); color: #fff;
+            cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.5), inset 0 2px 4px rgba(255,255,255,0.1);
+            display: flex; justify-content: center; align-items: center; transition: transform 0.1s;
+        }
+        .btn-transport:active { transform: scale(0.95); }
+        .btn-play-dj.active { background: linear-gradient(135deg, #9333ea, #d946ef); box-shadow: 0 0 15px rgba(217, 70, 239, 0.6); }
+        .deck-b-theme .btn-play-dj.active { background: linear-gradient(135deg, #0891b2, #22d3ee); box-shadow: 0 0 15px rgba(34, 211, 238, 0.6); }
+
+        .tempo-fader-container {
+            height: 140px; display: flex; align-items: center; background: rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.05);
+            padding: 8px; border-radius: 8px; position: absolute; right: 8px; top: 50%; transform: translateY(-50%); z-index: 10;
+        }
+
+        /* Live Looper Buttons */
+        .loop-controls { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 12px; width: 100%; }
+        .btn-loop {
+            background: rgba(31, 41, 55, 0.8); border: 1px solid #4b5563; color: #9ca3af;
+            padding: 4px 10px; border-radius: 4px; font-size: 10px; font-weight: bold; cursor: pointer; transition: all 0.2s;
+        }
+        .btn-loop:hover { color: #fff; border-color: #d946ef; }
+        .btn-loop.active { background: rgba(217, 70, 239, 0.3); color: #fff; border-color: #d946ef; box-shadow: 0 0 10px rgba(217, 70, 239, 0.4); }
+        .deck-b-theme .btn-loop:hover { border-color: #22d3ee; }
+        .deck-b-theme .btn-loop.active { background: rgba(34, 211, 238, 0.3); border-color: #22d3ee; box-shadow: 0 0 10px rgba(34, 211, 238, 0.4); }
+        .btn-loop-exit { background: rgba(239, 68, 68, 0.2); color: #ef4444; border-color: #ef4444; display: none; }
+        .btn-loop-exit:hover { background: rgba(239, 68, 68, 0.4); color: #fff; }
+
+        /* Mixer */
+        .dj-mixer { grid-area: mixer; display: flex; flex-direction: column; justify-content: space-between; }
+        .mixer-channels { display: flex; justify-content: space-around; flex-grow: 1; gap: 8px; }
+        .channel { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 48%; }
+        
+        .headphone-cue-btn {
+            width: 100%; padding: 8px; border-radius: 6px; font-weight: bold; font-size: 11px; outline: none;
+            background: rgba(31, 41, 55, 0.8); border: 1px solid #4b5563; color: #9ca3af;
+            cursor: pointer; transition: all 0.2s; display: flex; justify-content: center; align-items: center; gap: 6px;
+        }
+        .headphone-cue-btn.active { background: rgba(217, 70, 239, 0.2); border-color: #d946ef; color: #fff; box-shadow: 0 0 10px rgba(217, 70, 239, 0.4); }
+        .deck-b-theme .headphone-cue-btn.active { background: rgba(34, 211, 238, 0.2); border-color: #22d3ee; color: #fff; box-shadow: 0 0 10px rgba(34, 211, 238, 0.4); }
+
+        .eq-section {
+            display: flex; flex-direction: row; justify-content: space-evenly; align-items: center;
+            background: rgba(0,0,0,0.3); padding: 12px 5px; border-radius: 8px; width: 100%; height: 160px;
+            transition: box-shadow 0.3s, border-color 0.3s; border: 1px solid transparent;
+        }
+        .eq-section.drop-active {
+            border-color: #ef4444;
+            box-shadow: inset 0 0 15px rgba(239, 68, 68, 0.2), 0 0 10px rgba(239, 68, 68, 0.3);
+        }
+
+        .eq-fader-col { display: flex; flex-direction: column; align-items: center; gap: 8px; height: 100%; }
+        .knob-label { font-size: 10px; font-weight: bold; color: #9ca3af; letter-spacing: 1px; }
+
+        .channel-fader-container { height: 140px; display: flex; justify-content: center; background: rgba(0,0,0,0.4); padding: 8px; border-radius: 8px; width: 100%; }
+        
+        .crossfader-container {
+            height: 60px; background: rgba(0,0,0,0.5); border-radius: 8px;
+            display: flex; justify-content: center; align-items: center; padding: 0 15px;
+            margin-top: 12px; border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .btn-refresh {
+            background: rgba(55, 65, 81, 0.4); border: 1px solid rgba(156, 163, 175, 0.3); outline: none;
+            padding: 8px 12px; border-radius: 6px; display: flex; align-items: center; gap: 6px;
+            font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.05em; cursor: pointer; transition: all 0.2s;
+        }
+        .btn-refresh:hover { background: rgba(217, 70, 239, 0.2); border-color: #d946ef; color: white; }
+
+        /* Tappable Soundboard / Sampler */
+        .sampler-section {
+            grid-area: sampler;
+            background: rgba(15, 10, 25, 0.75); border: 1px solid rgba(168, 85, 247, 0.25);
+            border-radius: 12px; padding: 12px 16px;
+            display: flex; gap: 12px; align-items: center;
+        }
+        .sampler-pad {
+            flex: 1; height: 60px; border-radius: 8px;
+            background: rgba(31, 41, 55, 0.6); border: 2px solid #4b5563;
+            color: #e5e7eb; font-weight: bold; font-size: 12px; letter-spacing: 1px;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            cursor: pointer; transition: all 0.1s; position: relative; overflow: hidden;
+        }
+        .sampler-pad:hover { border-color: #9ca3af; color: #fff; }
+        .sampler-pad:active, .sampler-pad.active {
+            background: rgba(217, 70, 239, 0.3); border-color: #d946ef; color: #fff;
+            transform: scale(0.95); box-shadow: 0 0 15px rgba(217, 70, 239, 0.6);
+        }
+        .pad-key { position: absolute; top: 4px; right: 6px; font-size: 10px; color: #9ca3af; font-family: monospace; }
+        .pad-subtext { font-size: 8px; color: #9ca3af; font-weight: normal; margin-top: 2px; }
+
+        /* DJ Crate */
+        .crate-section {
+            grid-area: crate; background: rgba(15, 10, 25, 0.85); border: 1px solid rgba(88, 28, 135, 0.4);
+            border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 12px; min-height: 250px;
+        }
+        .crate-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px; }
+        .crate-list { flex-grow: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+        .crate-item {
+            display: flex; justify-content: space-between; align-items: center;
+            background: rgba(31, 41, 55, 0.4); padding: 8px 12px; border-radius: 8px;
+            border: 1px solid transparent; transition: background 0.2s;
+        }
+        .crate-item:hover { background: rgba(55, 65, 81, 0.6); }
+        .load-btns { display: flex; gap: 8px; }
+        .btn-load {
+            padding: 6px 12px; border-radius: 6px; font-size: 11px; font-weight: bold; outline: none;
+            cursor: pointer; border: none; transition: transform 0.1s;
+        }
+        .btn-load:active { transform: scale(0.95); }
+        .btn-load-a { background: rgba(217, 70, 239, 0.2); color: #fbcfe8; border: 1px solid #d946ef; }
+        .btn-load-b { background: rgba(34, 211, 238, 0.2); color: #cffafe; border: 1px solid #22d3ee; }
+
+        /* Sliders */
+        input[type=range].fader-vertical { -webkit-appearance: slider-vertical; width: 24px; height: 100%; background: transparent; outline: none; cursor: pointer; transition: filter 0.2s; }
+        input[type=range].fader-vertical:hover { filter: brightness(1.2); }
+        input[type=range].fader-horizontal { -webkit-appearance: none; width: 100%; height: 8px; background: #374151; border-radius: 4px; outline: none; cursor: pointer; }
+        input[type=range].fader-horizontal::-webkit-slider-thumb {
+            -webkit-appearance: none; width: 24px; height: 36px;
+            background: linear-gradient(to bottom, #9ca3af, #4b5563); border: 1px solid #111;
+            border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.5);
+        }
+
+        /* Responsive Decks */
+        @media (max-width: 1024px) {
+            .dj-console {
+                grid-template-areas: "screen" "deckA" "mixer" "deckB" "sampler" "crate";
+                grid-template-columns: 1fr; grid-template-rows: auto;
+            }
+            .dj-screen { flex-direction: column; align-items: stretch; }
+            .screen-master-section { width: 100%; }
+            .tempo-fader-container { position: relative; right: 0; top: 0; height: 100px; }
+        }
 
     </style>
 </head>
 <body>
 
-    <div class="scanline"></div>
-
-    <div class="glitch-wrapper">
-        <div class="glitch" data-text="SUBJECT 44">SUBJECT 44</div>
-    </div>
-    
-    <div style="margin-top:10px; color:#94a3b8; letter-spacing: 4px;">THE HALLOWED DEMESNE</div>
-
-    <div class="status-log" id="log">
-        <!-- JS will populate this -->
+    <!-- Interaction Overlay (Forces Click for Audio Context) -->
+    <div id="interaction-overlay" class="overlay-glass">
+        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#d946ef" stroke-width="1.5" class="pulse" style="margin: 0 auto 16px auto;"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        <h2 class="text-2xl font-bold text-white mb-2" style="letter-spacing: 0.1em; text-transform: uppercase;">ACTIVATE DECKS</h2>
+        <p class="text-gray text-sm">Click anywhere to connect audio engine</p>
     </div>
 
-    <button class="btn-start" onclick="bootSequence()">INITIALIZE LINK</button>
+    <!-- Synapse Trippy Background -->
+    <canvas id="synapse-canvas" class="synapse-canvas"></canvas>
 
+    <!-- Main Standalone Application -->
+    <div class="app-container">
+        <div class="app-header">
+            <div class="flex items-center gap-3 text-gray">
+                <img src="1000002638.jpg" alt="Nafwise Athelgard Badge" style="width: 36px; height: 36px; border-radius: 50%; border: 2px solid #d946ef; box-shadow: 0 0 12px rgba(217, 70, 239, 0.6); object-fit: cover;">
+                <span class="font-semibold text-lg tracking-wide text-white">NAFWISE PRESENTS: ANIMUS DJ DECKS</span>
+                <span class="text-xs ml-2" style="color: #22d3ee;">v5.0 Standalone</span>
+            </div>
+            <div id="clock" class="font-mono text-gray">00:00</div>
+        </div>
+
+        <div class="dj-console">
+            <!-- TOP SCREEN -->
+            <div class="dj-glass-panel dj-screen">
+                <!-- Deck A Info -->
+                <div class="screen-deck">
+                    <div class="track-info-container">
+                        <div>
+                            <h3 id="display-title-a" class="text-fuchsia font-bold text-lg truncate" style="max-width: 250px;">DECK A</h3>
+                            <p id="display-artist-a" class="text-gray text-xs">No Track Loaded</p>
+                        </div>
+                        <div style="text-align: right;">
+                            <span id="time-current-a" class="font-mono text-lg font-bold text-white">00:00</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Master Routing & Broadcast -->
+                <div class="screen-master-section">
+                    <div class="routing-container">
+                        <div class="route-row">
+                            <span class="route-label">MASTER (OBS)</span>
+                            <select id="out-master" class="device-select">
+                                <option value="default">Default Speakers</option>
+                            </select>
+                        </div>
+                        <div class="route-row">
+                            <span class="route-label">CUE (HP)</span>
+                            <select id="out-cue" class="device-select">
+                                <option value="default">Default Speakers</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="visualizer-wrapper">
+                        <canvas id="master-visualizer" class="visualizer-canvas"></canvas>
+                    </div>
+                </div>
+
+                <!-- Deck B Info -->
+                <div class="screen-deck deck-b-theme">
+                    <div class="track-info-container" style="flex-direction: row-reverse;">
+                        <div style="text-align: right;">
+                            <h3 id="display-title-b" class="text-cyan font-bold text-lg truncate" style="max-width: 250px;">DECK B</h3>
+                            <p id="display-artist-b" class="text-gray text-xs">No Track Loaded</p>
+                        </div>
+                        <div style="text-align: left;">
+                            <span id="time-current-b" class="font-mono text-lg font-bold text-white">00:00</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- DECK A -->
+            <div class="dj-glass-panel dj-deck deck-a" id="panel-deck-a">
+                <div class="deck-top">
+                    <div class="bpm-display" id="bpm-a">--- BPM</div>
+                </div>
+                <div class="jog-wheel-container">
+                    <div class="jog-wheel" id="jog-a">
+                        <div class="jog-platter" id="jog-ring-a"></div>
+                        <div class="jog-screen"><canvas id="jog-canvas-a" width="66" height="66"></canvas></div>
+                    </div>
+                </div>
+                <div class="tempo-fader-container">
+                    <input type="range" class="fader-vertical" id="tempo-a" min="-0.16" max="0.16" step="0.001" value="0">
+                </div>
+                <div class="deck-bottom">
+                    <div class="loop-controls">
+                        <div style="display: flex; gap: 6px;">
+                            <button class="btn-loop" id="btn-loop-in-a">LOOP IN</button>
+                            <button class="btn-loop" id="btn-loop-out-a">OUT</button>
+                        </div>
+                        <button class="btn-loop btn-loop-exit" id="btn-loop-exit-a">EXIT LOOP</button>
+                    </div>
+                    <div class="transport-controls">
+                        <button class="btn-transport" id="btn-cue-a" title="CUE (Jump to Start)">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor"><circle cx="12" cy="12" r="8"></circle></svg>
+                        </button>
+                        <button class="btn-transport btn-play-dj" id="btn-play-a" title="PLAY/PAUSE [Shortcut: A]">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- MIXER -->
+            <div class="dj-glass-panel dj-mixer">
+                <div class="mixer-channels">
+                    <div class="channel">
+                        <button class="headphone-cue-btn" id="hp-cue-a">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 18v-6a9 9 0 0 1 18 0v6"></path><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"></path></svg>
+                            CUE A
+                        </button>
+                        <div class="eq-section" id="eq-section-a">
+                            <div class="eq-fader-col">
+                                <span class="knob-label">HI</span>
+                                <input type="range" class="fader-vertical" id="eq-high-a" min="-40" max="10" step="1" value="0">
+                            </div>
+                            <div class="eq-fader-col">
+                                <span class="knob-label">MID</span>
+                                <input type="range" class="fader-vertical" id="eq-mid-a" min="-40" max="10" step="1" value="0">
+                            </div>
+                            <div class="eq-fader-col">
+                                <span class="knob-label">LOW</span>
+                                <input type="range" class="fader-vertical" id="eq-low-a" min="-40" max="10" step="1" value="0">
+                            </div>
+                        </div>
+                        <div class="channel-fader-container"><input type="range" class="fader-vertical" id="vol-a" min="0" max="1" step="0.01" value="0.8"></div>
+                    </div>
+
+                    <div class="channel deck-b-theme">
+                        <button class="headphone-cue-btn" id="hp-cue-b">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 18v-6a9 9 0 0 1 18 0v6"></path><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"></path></svg>
+                            CUE B
+                        </button>
+                        <div class="eq-section" id="eq-section-b">
+                            <div class="eq-fader-col">
+                                <span class="knob-label">HI</span>
+                                <input type="range" class="fader-vertical" id="eq-high-b" min="-40" max="10" step="1" value="0">
+                            </div>
+                            <div class="eq-fader-col">
+                                <span class="knob-label">MID</span>
+                                <input type="range" class="fader-vertical" id="eq-mid-b" min="-40" max="10" step="1" value="0">
+                            </div>
+                            <div class="eq-fader-col">
+                                <span class="knob-label">LOW</span>
+                                <input type="range" class="fader-vertical" id="eq-low-b" min="-40" max="10" step="1" value="0">
+                            </div>
+                        </div>
+                        <div class="channel-fader-container"><input type="range" class="fader-vertical" id="vol-b" min="0" max="1" step="0.01" value="0.8"></div>
+                    </div>
+                </div>
+                
+                <!-- Auto Blend Controls -->
+                <div style="display: flex; justify-content: center; gap: 8px; margin-top: 16px;">
+                    <button id="btn-drop-master" class="btn-refresh" style="color: #9ca3af; background: rgba(55, 65, 81, 0.4); border-color: #4b5563; width: 32%; justify-content: center; padding: 10px;" title="AI Auto-EQ & Drop Detection">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                        DROP MSTR
+                    </button>
+                    <button id="btn-auto-dj" class="btn-refresh" style="color: #9ca3af; background: rgba(55, 65, 81, 0.4); border-color: #4b5563; width: 32%; justify-content: center; padding: 10px;" title="Automatically fade 6.8s before end and load next track">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                        AUTO DJ: OFF
+                    </button>
+                    <button id="btn-auto-blend" class="btn-refresh" style="color: #fff; background: rgba(147, 51, 234, 0.3); border-color: #d946ef; width: 32%; justify-content: center; padding: 10px;" title="Sync BPM, Play, and Crossfade Automatically">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/></svg>
+                        AUTO BLEND
+                    </button>
+                </div>
+
+                <div class="crossfader-container"><input type="range" class="fader-horizontal" id="crossfader" min="0" max="1" step="0.01" value="0.5"></div>
+            </div>
+
+            <!-- DECK B -->
+            <div class="dj-glass-panel dj-deck deck-b deck-b-theme" id="panel-deck-b">
+                <div class="deck-top">
+                    <div class="bpm-display" id="bpm-b">--- BPM</div>
+                </div>
+                <div class="jog-wheel-container">
+                    <div class="jog-wheel" id="jog-b">
+                        <div class="jog-platter" id="jog-ring-b"></div>
+                        <div class="jog-screen"><canvas id="jog-canvas-b" width="66" height="66"></canvas></div>
+                    </div>
+                </div>
+                <div class="tempo-fader-container">
+                    <input type="range" class="fader-vertical" id="tempo-b" min="-0.16" max="0.16" step="0.001" value="0">
+                </div>
+                <div class="deck-bottom">
+                    <div class="loop-controls">
+                        <div style="display: flex; gap: 6px;">
+                            <button class="btn-loop" id="btn-loop-in-b">LOOP IN</button>
+                            <button class="btn-loop" id="btn-loop-out-b">OUT</button>
+                        </div>
+                        <button class="btn-loop btn-loop-exit" id="btn-loop-exit-b">EXIT LOOP</button>
+                    </div>
+                    <div class="transport-controls">
+                        <button class="btn-transport" id="btn-cue-b" title="CUE (Jump to Start)">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor"><circle cx="12" cy="12" r="8"></circle></svg>
+                        </button>
+                        <button class="btn-transport btn-play-dj" id="btn-play-b" title="PLAY/PAUSE [Shortcut: D]">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAPPABLE SOUNDBOARD / SAMPLER -->
+            <div class="sampler-section">
+                <div style="width: 80px; text-align: center; border-right: 1px solid rgba(255,255,255,0.1); padding-right: 12px;">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#d946ef" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><rect x="7" y="7" width="3" height="3"></rect><rect x="14" y="7" width="3" height="3"></rect><rect x="7" y="14" width="3" height="3"></rect><rect x="14" y="14" width="3" height="3"></rect></svg>
+                    <div style="font-size: 9px; font-weight: bold; color: #9ca3af; margin-top: 4px;">SAMPLER</div>
+                </div>
+                <div class="sampler-pad" id="pad-q">
+                    <span class="pad-key">Q</span>SCRATCH<div class="pad-subtext">(Memory Zero-Lat)</div>
+                </div>
+                <div class="sampler-pad" id="pad-w">
+                    <span class="pad-key">W</span>REWIND<div class="pad-subtext">(Memory Zero-Lat)</div>
+                </div>
+                <div class="sampler-pad" id="pad-e" title="You can load custom ethereal backing vocal chops here!">
+                    <span class="pad-key">E</span>VOCAL ONE-SHOT<div class="pad-subtext">(Backing Vocals)</div>
+                </div>
+                <div class="sampler-pad" id="pad-r" title="Drop a heavy kick or isolated snare here!">
+                    <span class="pad-key">R</span>HEAVY IMPACT<div class="pad-subtext">(Sub Drop)</div>
+                </div>
+            </div>
+
+            <!-- DJ CRATE / LIBRARY -->
+            <div class="crate-section">
+                <div class="crate-header">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#d946ef" stroke-width="2"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"></path></svg>
+                        <h3 style="font-size: 16px; font-weight: bold; color: #fff;">DJ REPOSITORY</h3>
+                    </div>
+                    <!-- Small Local Add Button for DJ -->
+                    <label style="cursor: pointer; background: rgba(217,70,239,0.2); padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: bold; color: #fbcfe8; transition: all 0.2s;">
+                        + ADD LOCAL
+                        <input type="file" id="dj-crate-upload" accept="audio/*" multiple class="file-input" style="display: none;">
+                    </label>
+                </div>
+                <div class="crate-list" id="dj-crate-list">
+                    <!-- Automatically populated by JS from musicRepository -->
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Hidden Audio Elements -->
+    <audio id="audio-a" crossorigin="anonymous"></audio>
+    <audio id="audio-b" crossorigin="anonymous"></audio>
+    <audio id="master-out" autoplay crossorigin="anonymous"></audio>
+    <audio id="headphone-out" autoplay crossorigin="anonymous"></audio>
+
+    <!-- Main Logic -->
     <script>
-        const lines = [
-            "> Checking Vital Signs... STABLE",
-            "> Loading Akashic Archives... DONE",
-            "> Syncing with Gib... CONNECTED",
-            "> Thorne Defense Protocols... ONLINE",
-            "> Establishing Neural Handshake..."
-        ];
+        // --- Shared Constants & Utilities ---
+        const iconPlaySmall = `<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>`;
+        const iconPauseSmall = `<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>`;
 
-        const logDiv = document.getElementById('log');
+        function formatTime(seconds) {
+            if (isNaN(seconds)) return "0:00";
+            const mins = Math.floor(seconds / 60); const secs = Math.floor(seconds % 60);
+            return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+        }
 
-        lines.forEach((line, index) => {
-            setTimeout(() => {
-                const div = document.createElement('div');
-                div.className = 'status-line';
-                div.innerText = line;
-                logDiv.appendChild(div);
-            }, index * 400);
+        // =======================================================================
+        // 🔥 ONLINE REPOSITORY DATABASE 🔥
+        // =======================================================================
+        const musicRepository = {
+            "DnB": {
+                icon: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18v-6a9 9 0 0 1 18 0v6"></path><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"></path></svg>`,
+                tracks: [
+                    { title: "Abduction Protocol", artist: "Nafwise", url: "music/DnB/Abduction Protocol.mp3" },
+                    { title: "Abyss", artist: "Nafwise", url: "music/DnB/Abyss.mp3" },
+                    { title: "Are You Thrummin?", artist: "Nafwise", url: "music/DnB/Are You Thrummin_.mp3" },
+                    { title: "Bluegrass Banjo", artist: "Nafwise", url: "music/DnB/Bluegrass Banjo.mp3" },
+                    { title: "Buffered Reality", artist: "Nafwise", url: "music/DnB/Buffered Reality.mp3" },
+                    { title: "Cortex Glitch", artist: "Nafwise", url: "music/DnB/Cortex Glitch.mp3" },
+                    { title: "Crit Fail", artist: "Nafwise", url: "music/DnB/Crit Fail.mp3" },
+                    { title: "Currency", artist: "Nafwise", url: "music/DnB/Currency.mp3" },
+                    { title: "Echo Chamber 1991", artist: "Nafwise", url: "music/DnB/Echo Chamber 1991.mp3" },
+                    { title: "Ethereal", artist: "Nafwise", url: "music/DnB/Ethereal.mp3" },
+                    { title: "Event Horizon", artist: "Nafwise", url: "music/DnB/Event Horizon.mp3" },
+                    { title: "Event Horizon Drift", artist: "Nafwise", url: "music/DnB/Event Horizon Drift.mp3" },
+                    { title: "Ghost Circuit", artist: "Nafwise", url: "music/DnB/Ghost Circuit.mp3" },
+                    { title: "Gods of the Underground", artist: "Nafwise", url: "music/DnB/Gods of the Underground.mp3" },
+                    { title: "Jazz Hands!", artist: "Nafwise", url: "music/DnB/Jazz Hands!.mp3" },
+                    { title: "Just keep Thrummin", artist: "Nafwise", url: "music/DnB/Just keep Thrummin.mp3" },
+                    { title: "Light in the Machine", artist: "Nafwise", url: "music/DnB/Light in the Machine.mp3" },
+                    { title: "Lunar Waves", artist: "Nafwise", url: "music/DnB/Lunar Waves.mp3" },
+                    { title: "Mindfunk", artist: "Nafwise", url: "music/DnB/Mindfunk.mp3" },
+                    { title: "Moonlight Rave", artist: "Nafwise", url: "music/DnB/Moonlight Rave.mp3" },
+                    { title: "Nat 1", artist: "Nafwise", url: "music/DnB/Nat 1.mp3" },
+                    { title: "Neon Banshee", artist: "Nafwise", url: "music/DnB/Neon Banshee.mp3" },
+                    { title: "Neuro Quake", artist: "Nafwise", url: "music/DnB/Neuro Quake.mp3" },
+                    { title: "Ode to the Greats", artist: "Nafwise", url: "music/DnB/Ode to the Greats.mp3" },
+                    { title: "Panflute Blues", artist: "Nafwise", url: "music/DnB/Panflute Blues.mp3" },
+                    { title: "Pray", artist: "Nafwise", url: "music/DnB/Pray.mp3" },
+                    { title: "Prober", artist: "Nafwise", url: "music/DnB/Prober.mp3" },
+                    { title: "Rolling", artist: "Nafwise", url: "music/DnB/Rolling.mp3" },
+                    { title: "Safety in a Haunted Place", artist: "Nafwise", url: "music/DnB/Safety in a Haunted Place.mp3" },
+                    { title: "Steady Thrummin", artist: "Nafwise", url: "music/DnB/Steady Thrummin.mp3" },
+                    { title: "Synthetic Dream", artist: "Nafwise", url: "music/DnB/Synthetic Dream.mp3" },
+                    { title: "TekStep", artist: "Nafwise", url: "music/DnB/TekStep.mp3" },
+                    { title: "The Machine Choice", artist: "Nafwise", url: "music/DnB/The _Machine_ Choice.mp3" },
+                    { title: "The Dark Liquid", artist: "Nafwise", url: "music/DnB/The Dark Liquid.mp3" },
+                    { title: "The Gritty Bouncer", artist: "Nafwise", url: "music/DnB/The Gritty Bouncer.mp3" },
+                    { title: "The Initiative", artist: "Nafwise", url: "music/DnB/The Initiative.mp3" },
+                    { title: "The Jungle Hybrid", artist: "Nafwise", url: "music/DnB/The Jungle Hybrid.mp3" },
+                    { title: "The Lich's Toll", artist: "Nafwise", url: "music/DnB/The Lich's Toll.mp3" },
+                    { title: "The Titan’s Lament", artist: "Nafwise", url: "music/DnB/The Titan’s Lament.mp3" },
+                    { title: "The Titan’s Thrummin", artist: "Nafwise", url: "music/DnB/The Titan’s Thrummin.mp3" },
+                    { title: "Thrumgle", artist: "Nafwise", url: "music/DnB/Thrumgle.mp3" },
+                    { title: "Twilight Mist", artist: "Nafwise", url: "music/DnB/Twilight Mist.mp3" },
+                    { title: "Velvet Frequency", artist: "Nafwise", url: "music/DnB/Velvet Frequency.mp3" },
+                    { title: "Vocal Thummin", artist: "Nafwise", url: "music/DnB/Vocal Thummin.mp3" },
+                    { title: "Wild Surge", artist: "Nafwise", url: "music/DnB/Wild Surge.mp3" }
+                ]
+            },
+            "TnB Bardcore": {
+                icon: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="16" r="6"/><path d="M12.5 11.5 22 2l2 2-9.5 9.5"/><path d="m14 6 4 4"/></svg>`,
+                tracks: [
+                    { title: "Amber Dust", artist: "Animus Tavern", url: "music/TnB Bardcore/Amber Dust.mp3" },
+                    { title: "Athelgard Bard", artist: "Animus Tavern", url: "music/TnB Bardcore/Athelgard Bard.mp3" },
+                    { title: "Bardcore Bassline", artist: "Animus Tavern", url: "music/TnB Bardcore/Bardcore Bassline.mp3" },
+                    { title: "Bayou Creep", artist: "Animus Tavern", url: "music/TnB Bardcore/Bayou Creep.mp3" },
+                    { title: "Below Zero", artist: "Animus Tavern", url: "music/TnB Bardcore/Below Zero.mp3" },
+                    { title: "Canyon's Breath", artist: "Animus Tavern", url: "music/TnB Bardcore/Canyon's Breath.mp3" },
+                    { title: "Caravan of Chaos", artist: "Animus Tavern", url: "music/TnB Bardcore/Caravan of Chaos.mp3" },
+                    { title: "Doot Doot", artist: "Animus Tavern", url: "music/TnB Bardcore/Doot Doot.mp3" },
+                    { title: "Echoes in the Stone", artist: "Animus Tavern", url: "music/TnB Bardcore/Echoes in the Stone.mp3" },
+                    { title: "Floating Specks", artist: "Animus Tavern", url: "music/TnB Bardcore/Floating Specks.mp3" },
+                    { title: "Frostbite Step", artist: "Animus Tavern", url: "music/TnB Bardcore/Frostbite Step.mp3" },
+                    { title: "Gators Chops", artist: "Animus Tavern", url: "music/TnB Bardcore/Gators Chops.mp3" },
+                    { title: "Gaze of the Basilisk", artist: "Animus Tavern", url: "music/TnB Bardcore/Gaze of the Basilisk.mp3" },
+                    { title: "Glacial", artist: "Animus Tavern", url: "music/TnB Bardcore/Glacial.mp3" },
+                    { title: "Goblin Ambush!", artist: "Animus Tavern", url: "music/TnB Bardcore/Goblin Ambush!.mp3" },
+                    { title: "Knee Deep in the Muck", artist: "Animus Tavern", url: "music/TnB Bardcore/Knee Deep in the Muck.mp3" },
+                    { title: "Mimics Bite", artist: "Animus Tavern", url: "music/TnB Bardcore/Mimics Bite.mp3" },
+                    { title: "No Rest For The Wicked", artist: "Animus Tavern", url: "music/TnB Bardcore/No Rest For The Wicked.mp3" },
+                    { title: "Ooze in the Shadows", artist: "Animus Tavern", url: "music/TnB Bardcore/Ooze in the Shadows.mp3" },
+                    { title: "Orkoid Tide", artist: "Animus Tavern", url: "music/TnB Bardcore/Orkoid Tide.mp3" },
+                    { title: "Rock and a Hard Place", artist: "Animus Tavern", url: "music/TnB Bardcore/Rock and a Hard Place.mp3" },
+                    { title: "Snowfall Run", artist: "Animus Tavern", url: "music/TnB Bardcore/Snowfall Run.mp3" },
+                    { title: "Swampland Menace", artist: "Animus Tavern", url: "music/TnB Bardcore/Swampland Menace.mp3" },
+                    { title: "Sweeping Swamps", artist: "Animus Tavern", url: "music/TnB Bardcore/Sweeping Swamps.mp3" },
+                    { title: "The Floor is Trapped", artist: "Animus Tavern", url: "music/TnB Bardcore/The Floor is Trapped.mp3" },
+                    { title: "The Junkyard of Flesh", artist: "Animus Tavern", url: "music/TnB Bardcore/The Junkyard of Flesh.mp3" },
+                    { title: "The Long March", artist: "Animus Tavern", url: "music/TnB Bardcore/The Long March.mp3" },
+                    { title: "Thin Ice", artist: "Animus Tavern", url: "music/TnB Bardcore/Thin Ice.mp3" },
+                    { title: "Through the Mud", artist: "Animus Tavern", url: "music/TnB Bardcore/Through the Mud.mp3" },
+                    { title: "Venomized", artist: "Animus Tavern", url: "music/TnB Bardcore/Venomized.mp3" }
+                ]
+            },
+            "Meet The Creator": {
+                icon: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,
+                tracks: [
+                    { title: "Smoke and Mirrors (Babylon Burning)", artist: "Nathan", url: "music/Meet The Creator/01-Smoke and Mirrors (Babylon Burning).mp3" },
+                    { title: "Shoulda Gone Yard (snakes in the grass)", artist: "Nathan", url: "music/Meet The Creator/02-Shoulda Gone Yard (snakes in the grass).mp3" },
+                    { title: "Snake in the Grass 2.0", artist: "Nathan", url: "music/Meet The Creator/03-Snake in the Grass 2.0.mp3" },
+                    { title: "My Confession", artist: "Nathan", url: "music/Meet The Creator/04-My Confession.mp3" },
+                    { title: "My Girls", artist: "Nathan", url: "music/Meet The Creator/05-My Girls.mp3" },
+                    { title: "The Good Things (Lizzy & The Little One)", artist: "Nathan", url: "music/Meet The Creator/06-The Good Things (Lizzy & The Little One).mp3" },
+                    { title: "Ready Made Family", artist: "Nathan", url: "music/Meet The Creator/07-Ready Made Family.mp3" },
+                    { title: "Smoke and Mirrors (The Clarity)", artist: "Nathan", url: "music/Meet The Creator/08-Smoke and Mirrors (The Clarity).mp3" },
+                    { title: "My Shadow, My Light", artist: "Nathan", url: "music/Meet The Creator/My Shadow, My Light.mp3" },
+                    { title: "Meet Nathan", artist: "Nathan", url: "music/Meet The Creator/09-Meet Nathan.mp3" }
+                ]
+            }
+        };
+
+        // --- DJ Engine State ---
+        const DECK_A = 'a', DECK_B = 'b';
+        const crossfaderInput = document.getElementById('crossfader');
+
+        const decks = {
+            a: {
+                audio: document.getElementById('audio-a'), nodes: {}, isPlaying: false, url: null, cuePoint: 0, baseBpm: 0, headphoneCueActive: false,
+                loop: { in: null, out: null, active: false },
+                ui: {
+                    panel: document.getElementById('panel-deck-a'),
+                    title: document.getElementById('display-title-a'), artist: document.getElementById('display-artist-a'),
+                    timeCur: document.getElementById('time-current-a'),
+                    playBtn: document.getElementById('btn-play-a'), cueTransBtn: document.getElementById('btn-cue-a'), 
+                    jogRing: document.getElementById('jog-ring-a'), jogCanvas: document.getElementById('jog-canvas-a'),
+                    tempo: document.getElementById('tempo-a'), bpmDisplay: document.getElementById('bpm-a'),
+                    vol: document.getElementById('vol-a'), hpCueBtn: document.getElementById('hp-cue-a'),
+                    eqH: document.getElementById('eq-high-a'), eqM: document.getElementById('eq-mid-a'), eqL: document.getElementById('eq-low-a'),
+                    eqSection: document.getElementById('eq-section-a'),
+                    btnLoopIn: document.getElementById('btn-loop-in-a'), btnLoopOut: document.getElementById('btn-loop-out-a'), btnLoopExit: document.getElementById('btn-loop-exit-a')
+                }
+            },
+            b: {
+                audio: document.getElementById('audio-b'), nodes: {}, isPlaying: false, url: null, cuePoint: 0, baseBpm: 0, headphoneCueActive: false,
+                loop: { in: null, out: null, active: false },
+                ui: {
+                    panel: document.getElementById('panel-deck-b'),
+                    title: document.getElementById('display-title-b'), artist: document.getElementById('display-artist-b'),
+                    timeCur: document.getElementById('time-current-b'),
+                    playBtn: document.getElementById('btn-play-b'), cueTransBtn: document.getElementById('btn-cue-b'), 
+                    jogRing: document.getElementById('jog-ring-b'), jogCanvas: document.getElementById('jog-canvas-b'),
+                    tempo: document.getElementById('tempo-b'), bpmDisplay: document.getElementById('bpm-b'),
+                    vol: document.getElementById('vol-b'), hpCueBtn: document.getElementById('hp-cue-b'),
+                    eqH: document.getElementById('eq-high-b'), eqM: document.getElementById('eq-mid-b'), eqL: document.getElementById('eq-low-b'),
+                    eqSection: document.getElementById('eq-section-b'),
+                    btnLoopIn: document.getElementById('btn-loop-in-b'), btnLoopOut: document.getElementById('btn-loop-out-b'), btnLoopExit: document.getElementById('btn-loop-exit-b')
+                }
+            }
+        };
+
+        // --- Memory Soundboard (Zero Latency) ---
+        // Dummy 1-second silence buffer as placeholder for custom user uploads
+        const dummyWavBase64 = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
+        const samplers = {
+            'q': { url: 'deckeffects/Scratch.mp3', buffer: null, el: document.getElementById('pad-q') },
+            'w': { url: 'deckeffects/Rewind.mp3', buffer: null, el: document.getElementById('pad-w') },
+            'e': { url: dummyWavBase64, buffer: null, el: document.getElementById('pad-e') },
+            'r': { url: dummyWavBase64, buffer: null, el: document.getElementById('pad-r') }
+        };
+
+        // =======================================================================
+        // 🔥 ADVANCED AUDIO ENGINE (STANDALONE DJ) 🔥
+        // =======================================================================
+        let audioCtx, masterBus, headphoneBus;
+        let masterDest, headphoneDest;
+        let analyzer, analyzerA, analyzerB;
+        let dataArray, dataA, dataB;
+
+        // --- Drop Master AI State ---
+        let isDropMasterActive = false;
+        const dropState = {
+            a: { shortE: 0, longE: 0, active: false, timer: 0, targetH: 0, targetM: 0, targetL: 0 },
+            b: { shortE: 0, longE: 0, active: false, timer: 0, targetH: 0, targetM: 0, targetL: 0 }
+        };
+
+        const btnDropMaster = document.getElementById('btn-drop-master');
+        btnDropMaster.addEventListener('click', () => {
+            isDropMasterActive = !isDropMasterActive;
+            if (isDropMasterActive) {
+                btnDropMaster.style.color = '#fff';
+                btnDropMaster.style.background = 'rgba(239, 68, 68, 0.3)';
+                btnDropMaster.style.borderColor = '#ef4444';
+            } else {
+                btnDropMaster.style.color = '#9ca3af';
+                btnDropMaster.style.background = 'rgba(55, 65, 81, 0.4)';
+                btnDropMaster.style.borderColor = '#4b5563';
+                
+                decks.a.ui.eqSection.classList.remove('drop-active');
+                decks.b.ui.eqSection.classList.remove('drop-active');
+                dropState.a.active = false; dropState.b.active = false;
+            }
         });
 
-        function bootSequence() {
-            document.body.style.transition = "opacity 1s";
-            document.body.style.opacity = "0";
-            
-            setTimeout(() => {
-                // REDIRECT TO THE GAME ENGINE
-                window.location.href = "game.html";
-            }, 1000);
+        async function loadSamplerBuffers() {
+            for (const key of Object.keys(samplers)) {
+                try {
+                    const res = await fetch(samplers[key].url);
+                    const buf = await res.arrayBuffer();
+                    samplers[key].buffer = await audioCtx.decodeAudioData(buf);
+                } catch(e) { console.warn(`Failed to load sampler [${key}]:`, e); }
+            }
         }
+
+        function playSample(key) {
+            if (!audioCtx || !samplers[key] || !samplers[key].buffer) return;
+            const source = audioCtx.createBufferSource();
+            source.buffer = samplers[key].buffer;
+            source.connect(masterBus);
+            source.start(0);
+
+            // Fast UI Feedback
+            const pad = samplers[key].el;
+            if (pad) {
+                pad.classList.add('active');
+                setTimeout(() => pad.classList.remove('active'), 150);
+            }
+        }
+
+        // Tappable Soundboard Click Events
+        document.getElementById('pad-q').addEventListener('mousedown', () => playSample('q'));
+        document.getElementById('pad-w').addEventListener('mousedown', () => playSample('w'));
+        document.getElementById('pad-e').addEventListener('mousedown', () => playSample('e'));
+        document.getElementById('pad-r').addEventListener('mousedown', () => playSample('r'));
+
+
+        function initAudioEngine() {
+            if (audioCtx) return;
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContext) return;
+            audioCtx = new AudioContext();
+
+            masterBus = audioCtx.createGain();
+            headphoneBus = audioCtx.createGain();
+
+            masterDest = audioCtx.createMediaStreamDestination();
+            headphoneDest = audioCtx.createMediaStreamDestination();
+
+            document.getElementById('master-out').srcObject = masterDest.stream;
+            document.getElementById('headphone-out').srcObject = headphoneDest.stream;
+
+            analyzer = audioCtx.createAnalyser(); 
+            analyzer.fftSize = 256; 
+            dataArray = new Uint8Array(analyzer.frequencyBinCount);
+            
+            // Drop Master Upgrade: 1024 FFT Size (approx 43Hz per bin) for precise Sub-Bass extraction
+            analyzerA = audioCtx.createAnalyser(); 
+            analyzerA.fftSize = 1024; 
+            dataA = new Uint8Array(analyzerA.frequencyBinCount);
+            
+            analyzerB = audioCtx.createAnalyser(); 
+            analyzerB.fftSize = 1024; 
+            dataB = new Uint8Array(analyzerB.frequencyBinCount);
+
+            masterBus.connect(analyzer);
+            masterBus.connect(masterDest);
+            headphoneBus.connect(headphoneDest);
+
+            // Load Zero-Latency Memory Samplers
+            loadSamplerBuffers();
+
+            setupDeckChain(DECK_A);
+            setupDeckChain(DECK_B);
+            updateCrossfaderLocal();
+
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            
+            drawVisualizer();
+        }
+
+        function setupDeckChain(id) {
+            const deck = decks[id];
+            deck.audio.preservesPitch = false; 
+
+            const source = audioCtx.createMediaElementSource(deck.audio);
+            if (id === DECK_A) source.connect(analyzerA);
+            if (id === DECK_B) source.connect(analyzerB);
+
+            const low = audioCtx.createBiquadFilter(); low.type = "lowshelf"; low.frequency.value = 250;
+            const mid = audioCtx.createBiquadFilter(); mid.type = "peaking"; mid.frequency.value = 1000; mid.Q.value = 1;
+            const high = audioCtx.createBiquadFilter(); high.type = "highshelf"; high.frequency.value = 4000;
+            
+            const splitNode = audioCtx.createGain(); splitNode.gain.value = 1.0;
+            const volGain = audioCtx.createGain();
+            const fadeGain = audioCtx.createGain();
+            const cueGain = audioCtx.createGain(); cueGain.gain.value = 0;
+
+            source.connect(low); low.connect(mid); mid.connect(high); high.connect(splitNode);
+            splitNode.connect(volGain); volGain.connect(fadeGain); fadeGain.connect(masterBus);
+            splitNode.connect(cueGain); cueGain.connect(headphoneBus);
+            
+            deck.nodes = { high, mid, low, volGain, fadeGain, cueGain };
+
+            function applyEQ() {
+                deck.nodes.high.gain.value = parseFloat(deck.ui.eqH.value);
+                deck.nodes.mid.gain.value  = parseFloat(deck.ui.eqM.value);
+                deck.nodes.low.gain.value  = parseFloat(deck.ui.eqL.value);
+            }
+
+            deck.ui.eqH.addEventListener('input', applyEQ);
+            deck.ui.eqM.addEventListener('input', applyEQ);
+            deck.ui.eqL.addEventListener('input', applyEQ);
+            deck.ui.vol.addEventListener('input', (e) => { volGain.gain.value = e.target.value; });
+            
+            deck.ui.hpCueBtn.addEventListener('click', () => {
+                deck.headphoneCueActive = !deck.headphoneCueActive;
+                deck.ui.hpCueBtn.classList.toggle('active', deck.headphoneCueActive);
+                deck.nodes.cueGain.gain.value = deck.headphoneCueActive ? 1.0 : 0;
+            });
+
+            deck.ui.tempo.addEventListener('input', (e) => {
+                const val = parseFloat(e.target.value);
+                deck.audio.playbackRate = 1 + val;
+                let bpmText = deck.baseBpm > 0 ? (deck.baseBpm * (1 + val)).toFixed(1) : "---";
+                deck.ui.bpmDisplay.innerHTML = `${bpmText} <span style="font-size:12px; color:#9ca3af; font-weight:normal;">${(val > 0 ? "+" : "") + (val * 100).toFixed(1)}%</span>`;
+            });
+
+            // Live Looper Binds
+            deck.ui.btnLoopIn.addEventListener('click', () => {
+                deck.loop.in = deck.audio.currentTime;
+                deck.ui.btnLoopIn.classList.add('active');
+            });
+            
+            deck.ui.btnLoopOut.addEventListener('click', () => {
+                if (deck.loop.in !== null) {
+                    deck.loop.out = deck.audio.currentTime;
+                    deck.loop.active = true;
+                    deck.ui.btnLoopOut.classList.add('active');
+                    deck.ui.btnLoopExit.style.display = 'block';
+                }
+            });
+
+            deck.ui.btnLoopExit.addEventListener('click', () => {
+                deck.loop.active = false;
+                deck.loop.in = null;
+                deck.loop.out = null;
+                deck.ui.btnLoopIn.classList.remove('active');
+                deck.ui.btnLoopOut.classList.remove('active');
+                deck.ui.btnLoopExit.style.display = 'none';
+            });
+
+            deck.ui.playBtn.addEventListener('click', () => { toggleDjPlay(id); });
+            deck.ui.cueTransBtn.addEventListener('mousedown', () => { jumpToDjCue(id, true); });
+            deck.ui.cueTransBtn.addEventListener('mouseup', () => { releaseDjCue(id); });
+
+            deck.audio.addEventListener('timeupdate', () => updateDjProgress(id));
+            deck.audio.addEventListener('ended', () => { deck.isPlaying = false; updateDjTransportUI(id); });
+            setupDjScrubbing(id);
+        }
+
+        crossfaderInput.addEventListener('input', updateCrossfaderLocal);
+
+        function updateCrossfaderLocal() {
+            if (!audioCtx) return;
+            const val = parseFloat(crossfaderInput.value);
+            decks[DECK_A].nodes.fadeGain.gain.value = Math.cos(val * 0.5 * Math.PI);
+            decks[DECK_B].nodes.fadeGain.gain.value = Math.cos((1.0 - val) * 0.5 * Math.PI);
+        }
+
+        // --- Auto Cue, Auto DJ and Blend Logic ---
+        const btnAutoBlend = document.getElementById('btn-auto-blend');
+        const btnAutoDj = document.getElementById('btn-auto-dj');
+        let autoBlendActive = false;
+        let isAutoDjActive = false;
+        window.playedDjTrackUrls = window.playedDjTrackUrls || [];
+
+        // --- Async BPM Fetcher ---
+        async function fetchAndCalculateBPM(url, deckId) {
+            try {
+                const response = await fetch(url);
+                const arrayBuffer = await response.arrayBuffer();
+                const detectedBpm = await calculateBPM(arrayBuffer);
+                decks[deckId].baseBpm = detectedBpm;
+                decks[deckId].ui.tempo.dispatchEvent(new Event('input')); 
+            } catch(e) {
+                console.warn("BPM Calc failed for:", url, e);
+                decks[deckId].baseBpm = 0;
+                decks[deckId].ui.bpmDisplay.textContent = "--- BPM"; 
+            }
+        }
+
+        btnAutoDj.addEventListener('click', () => {
+            isAutoDjActive = !isAutoDjActive;
+            if (isAutoDjActive) {
+                btnAutoDj.style.color = '#fff';
+                btnAutoDj.style.background = 'rgba(34, 211, 238, 0.3)';
+                btnAutoDj.style.borderColor = '#22d3ee';
+                btnAutoDj.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg> AUTO DJ: ON`;
+            } else {
+                btnAutoDj.style.color = '#9ca3af';
+                btnAutoDj.style.background = 'rgba(55, 65, 81, 0.4)';
+                btnAutoDj.style.borderColor = '#4b5563';
+                btnAutoDj.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg> AUTO DJ: OFF`;
+            }
+        });
+
+        // --- Intelligent Background Track Scanner ---
+        async function loadRandomUnplayedTrack(deckId, requireInstant = false) {
+            let pool = [];
+            let activeGenres = [];
+            if (window.openDjGenres && window.openDjGenres.size > 0) {
+                activeGenres = Array.from(window.openDjGenres);
+            } else {
+                activeGenres = window.allowedDjGenres || ["DnB", "TnB Bardcore", "Meet The Creator"];
+            }
+
+            for (const genre of activeGenres) {
+                if (musicRepository[genre]) pool = pool.concat(musicRepository[genre].tracks);
+            }
+            
+            let unplayed = pool.filter(t => !window.playedDjTrackUrls.includes(t.url));
+            if (unplayed.length === 0) {
+                window.playedDjTrackUrls = []; 
+                unplayed = pool;
+            }
+
+            if (requireInstant || unplayed.length <= 1) {
+                const track = unplayed[Math.floor(Math.random() * unplayed.length)];
+                if(track) {
+                    window.playedDjTrackUrls.push(track.url);
+                    loadDjTrack(deckId, track.url, track.title, track.artist);
+                    decks[deckId].ui.bpmDisplay.textContent = "CALC...";
+                    fetchAndCalculateBPM(track.url, deckId);
+                }
+                return;
+            }
+
+            decks[deckId].ui.bpmDisplay.textContent = "SCANNING...";
+            const otherDeckId = deckId === 'a' ? 'b' : 'a';
+            const targetBpm = decks[otherDeckId].baseBpm || 120; 
+            
+            const candidates = unplayed.sort(() => 0.5 - Math.random()).slice(0, 4);
+            
+            const bpmPromises = candidates.map(async (track) => {
+                try {
+                    const res = await fetch(track.url);
+                    const buf = await res.arrayBuffer();
+                    const bpm = await calculateBPM(buf);
+                    return { track, bpm };
+                } catch(e) { return { track, bpm: 120 }; }
+            });
+
+            const results = await Promise.all(bpmPromises);
+            
+            let bestTrack = results[0].track;
+            let bestBpm = results[0].bpm;
+            let bestScore = -99999;
+
+            for (const res of results) {
+                const diff = res.bpm - targetBpm;
+                const absDiff = Math.abs(diff);
+                let score = 0;
+                
+                // 1. Limit to max 10 BPM difference for smoother blending
+                if (absDiff <= 10) score += 1000;
+                // 2. Prefer going higher in BPM
+                if (diff >= 0 && diff <= 10) score += 500;
+                // 3. Prefer closest match overall
+                score -= absDiff;
+
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestTrack = res.track;
+                    bestBpm = res.bpm;
+                }
+            }
+
+            window.playedDjTrackUrls.push(bestTrack.url);
+            loadDjTrack(deckId, bestTrack.url, bestTrack.title, bestTrack.artist);
+            decks[deckId].baseBpm = bestBpm;
+            decks[deckId].ui.tempo.dispatchEvent(new Event('input')); 
+        }
+
+        function triggerAutoBlend() {
+            if (autoBlendActive) return; 
+            
+            const currentVal = parseFloat(crossfaderInput.value);
+            let targetVal, sourceDeck, targetDeck, sourceId, targetId;
+
+            if (currentVal < 0.5) {
+                targetVal = 1.0; sourceDeck = decks.a; targetDeck = decks.b; sourceId = 'a'; targetId = 'b';
+            } else {
+                targetVal = 0.0; sourceDeck = decks.b; targetDeck = decks.a; sourceId = 'b'; targetId = 'a';
+            }
+
+            if (!targetDeck.url && isAutoDjActive) {
+                loadRandomUnplayedTrack(targetId, true); 
+            }
+
+            if (!targetDeck.url) return; 
+
+            autoBlendActive = true;
+            btnAutoBlend.style.background = 'rgba(239, 68, 68, 0.3)';
+            btnAutoBlend.style.borderColor = '#ef4444';
+            btnAutoBlend.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="pulse"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg> BLENDING...`;
+
+            const sourceBpm = sourceDeck.baseBpm > 0 ? sourceDeck.baseBpm * (1 + parseFloat(sourceDeck.ui.tempo.value)) : 0;
+            let targetTempoStart = 0;
+            let sourceTempoStart = parseFloat(sourceDeck.ui.tempo.value);
+            let sourceTempoEnd = sourceTempoStart;
+
+            if (sourceBpm > 0 && targetDeck.baseBpm > 0) {
+                targetTempoStart = (sourceBpm / targetDeck.baseBpm) - 1;
+                targetTempoStart = Math.max(-0.16, Math.min(0.16, targetTempoStart));
+                
+                targetDeck.ui.tempo.value = targetTempoStart;
+                targetDeck.audio.playbackRate = 1 + targetTempoStart;
+                targetDeck.ui.bpmDisplay.innerHTML = `${(targetDeck.baseBpm * (1 + targetTempoStart)).toFixed(1)} <span style="font-size:12px; color:#9ca3af; font-weight:normal;">${(targetTempoStart > 0 ? "+" : "") + (targetTempoStart * 100).toFixed(1)}%</span>`;
+                
+                sourceTempoEnd = (targetDeck.baseBpm / sourceDeck.baseBpm) - 1;
+                sourceTempoEnd = Math.max(-0.16, Math.min(0.16, sourceTempoEnd));
+            }
+
+            if (!targetDeck.isPlaying) {
+                targetDeck.audio.currentTime = targetDeck.cuePoint;
+                targetDeck.audio.play().catch(()=>{});
+                targetDeck.isPlaying = true;
+                updateDjTransportUI(targetId);
+            }
+
+            const duration = 6800; 
+            const startTime = performance.now();
+            const startVal = currentVal;
+
+            function animateBlend(time) {
+                const elapsed = time - startTime;
+                let progress = elapsed / duration;
+                if (progress > 1.0) progress = 1.0;
+                
+                const ease = progress < 0.5 ? 2 * progress * progress : 1 - Math.pow(-2 * progress + 2, 2) / 2;
+
+                crossfaderInput.value = startVal + (targetVal - startVal) * ease;
+                updateCrossfaderLocal();
+
+                if (sourceBpm > 0 && targetDeck.baseBpm > 0) {
+                    const currentTargetTempo = targetTempoStart * (1 - progress); 
+                    const currentSourceTempo = sourceTempoStart + (sourceTempoEnd - sourceTempoStart) * progress;
+                    
+                    targetDeck.ui.tempo.value = currentTargetTempo;
+                    targetDeck.audio.playbackRate = 1 + currentTargetTempo;
+                    targetDeck.ui.bpmDisplay.innerHTML = `${(targetDeck.baseBpm * (1 + currentTargetTempo)).toFixed(1)} <span style="font-size:12px; color:#9ca3af; font-weight:normal;">${(currentTargetTempo > 0 ? "+" : "") + (currentTargetTempo * 100).toFixed(1)}%</span>`;
+
+                    sourceDeck.ui.tempo.value = currentSourceTempo;
+                    sourceDeck.audio.playbackRate = 1 + currentSourceTempo;
+                    sourceDeck.ui.bpmDisplay.innerHTML = `${(sourceDeck.baseBpm * (1 + currentSourceTempo)).toFixed(1)} <span style="font-size:12px; color:#9ca3af; font-weight:normal;">${(currentSourceTempo > 0 ? "+" : "") + (currentSourceTempo * 100).toFixed(1)}%</span>`;
+                }
+
+                if (progress < 1.0) {
+                    requestAnimationFrame(animateBlend);
+                } else {
+                    autoBlendActive = false;
+                    btnAutoBlend.style.background = 'rgba(147, 51, 234, 0.3)';
+                    btnAutoBlend.style.borderColor = '#d946ef';
+                    btnAutoBlend.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/></svg> AUTO BLEND`;
+                    
+                    if (sourceDeck.isPlaying) {
+                        sourceDeck.audio.pause();
+                        sourceDeck.isPlaying = false;
+                        // Turn off any active loops when fading out
+                        sourceDeck.loop.active = false;
+                        sourceDeck.loop.in = null;
+                        sourceDeck.loop.out = null;
+                        sourceDeck.ui.btnLoopIn.classList.remove('active');
+                        sourceDeck.ui.btnLoopOut.classList.remove('active');
+                        sourceDeck.ui.btnLoopExit.style.display = 'none';
+
+                        updateDjTransportUI(sourceId);
+                    }
+                    
+                    if (isAutoDjActive) {
+                        loadRandomUnplayedTrack(sourceId, false);
+                    }
+                }
+            }
+            requestAnimationFrame(animateBlend);
+        }
+
+        btnAutoBlend.addEventListener('click', triggerAutoBlend);
+
+        // --- Hardware Device Routing ---
+        async function populateDevices() {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+            try {
+                try { await navigator.mediaDevices.getUserMedia({ audio: true }); } catch(e){}
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const audioOutputs = devices.filter(d => d.kind === 'audiooutput');
+                
+                const masterSelect = document.getElementById('out-master');
+                const cueSelect = document.getElementById('out-cue');
+                
+                const currentMaster = masterSelect.value; const currentCue = cueSelect.value;
+                
+                masterSelect.innerHTML = '<option value="default">Default Speakers</option><option value="communications">Communications Device</option>';
+                cueSelect.innerHTML = '<option value="communications">Communications Device</option><option value="default">Default Speakers</option>';
+
+                audioOutputs.forEach(device => {
+                    if (device.deviceId === 'default' || device.deviceId === 'communications' || !device.deviceId) return;
+                    const label = device.label || `Audio Device (${device.deviceId.substring(0, 5)})`;
+                    masterSelect.add(new Option(label, device.deviceId)); cueSelect.add(new Option(label, device.deviceId));
+                });
+
+                if (masterSelect.querySelector(`option[value="${currentMaster}"]`)) masterSelect.value = currentMaster;
+                if (cueSelect.querySelector(`option[value="${currentCue}"]`)) cueSelect.value = currentCue;
+            } catch (err) { console.warn("Device populate failed:", err); }
+        }
+
+        document.getElementById('out-master').addEventListener('change', async (e) => {
+            const el = document.getElementById('master-out');
+            if (el && el.setSinkId) { try { await el.setSinkId(e.target.value); } catch(err) { console.warn(err); } }
+        });
+
+        document.getElementById('out-cue').addEventListener('change', async (e) => {
+            const el = document.getElementById('headphone-out');
+            if (el && el.setSinkId) { try { await el.setSinkId(e.target.value); } catch(err) { console.warn(err); } }
+        });
+
+        // --- Unlock Audio Engine Overlay ---
+        document.getElementById('interaction-overlay').addEventListener('click', async function() {
+            this.style.opacity = '0';
+            setTimeout(() => this.style.display = 'none', 500);
+            
+            const dummyWav = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
+            
+            decks.a.audio.src = dummyWav; decks.a.audio.play().catch(()=>{});
+            decks.b.audio.src = dummyWav; decks.b.audio.play().catch(()=>{});
+
+            try { initAudioEngine(); } catch (err) { console.warn("Audio Engine Blocked:", err); }
+            await populateDevices();
+        });
+
+        // --- DJ Crate Logic (Accordion Folders with ID3 Tagging) ---
+        window.allowedDjGenres = ["DnB", "TnB Bardcore", "Meet The Creator"];
+        window.openDjGenres = new Set();
+        let renderCrateTimeout;
+
+        function debouncedRenderDjCrate() {
+            clearTimeout(renderCrateTimeout);
+            renderCrateTimeout = setTimeout(renderDjCrate, 100);
+        }
+
+        function renderDjCrate() {
+            const list = document.getElementById('dj-crate-list');
+            list.innerHTML = '';
+            
+            for (const [genreName, genreData] of Object.entries(musicRepository)) {
+                if (!window.allowedDjGenres.includes(genreName)) continue;
+
+                const headerBtn = document.createElement('div');
+                const isOpen = window.openDjGenres.has(genreName);
+                
+                headerBtn.style.cssText = `background: ${isOpen ? 'rgba(31, 41, 55, 0.6)' : 'rgba(88, 28, 135, 0.4)'}; padding: 10px 12px; font-weight: bold; font-size: 13px; margin-top: 8px; border-radius: 6px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; color: #fff; transition: background 0.2s; border: 1px solid ${isOpen ? 'rgba(88, 28, 135, 0.5)' : '#d946ef'};`;
+                
+                let iconSvg = genreData.icon || `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>`;
+
+                headerBtn.innerHTML = `
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="color: #d946ef;">${iconSvg}</span>
+                        ${genreName} <span style="font-size: 11px; color: #9ca3af; margin-left: 4px; font-family: monospace;">(${genreData.tracks.length})</span>
+                    </div>
+                    <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transition: transform 0.3s; transform: ${isOpen ? 'rotate(0deg)' : 'rotate(180deg)'};"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                `;
+
+                const trackContainer = document.createElement('div');
+                trackContainer.style.cssText = `display: ${isOpen ? 'flex' : 'none'}; flex-direction: column; gap: 4px; padding-top: 6px; padding-left: 8px;`;
+                
+                headerBtn.addEventListener('click', () => {
+                    const willOpen = trackContainer.style.display === 'none';
+                    trackContainer.style.display = willOpen ? 'flex' : 'none';
+                    headerBtn.querySelector('.chevron').style.transform = willOpen ? 'rotate(0deg)' : 'rotate(180deg)';
+                    headerBtn.style.background = willOpen ? 'rgba(31, 41, 55, 0.6)' : 'rgba(88, 28, 135, 0.4)';
+                    headerBtn.style.borderColor = willOpen ? 'rgba(88, 28, 135, 0.5)' : '#d946ef';
+                    
+                    if (willOpen) window.openDjGenres.add(genreName);
+                    else window.openDjGenres.delete(genreName);
+                });
+
+                list.appendChild(headerBtn);
+                list.appendChild(trackContainer);
+
+                genreData.tracks.forEach((track, index) => {
+                    const item = document.createElement('div');
+                    item.className = 'crate-item';
+                    item.style.padding = '8px 12px'; 
+                    if (track.isLocal) item.style.borderLeft = '2px solid #22d3ee'; 
+                    
+                    const titleContainer = document.createElement('div');
+                    titleContainer.className = 'truncate';
+                    titleContainer.style.flexGrow = '1';
+                    titleContainer.style.paddingRight = '10px';
+                    titleContainer.innerHTML = `<div class="text-sm font-bold text-white truncate">${track.title} ${track.isLocal ? '<span style="color:#22d3ee; font-size:10px;">(Local)</span>' : ''}</div>`;
+                    
+                    const btnContainer = document.createElement('div');
+                    btnContainer.className = 'load-btns';
+                    
+                    const btnA = document.createElement('button');
+                    btnA.className = 'btn-load btn-load-a';
+                    btnA.textContent = 'LOAD A';
+                    btnA.addEventListener('click', () => loadFromDjCrate(genreName, index, 'a'));
+                    
+                    const btnB = document.createElement('button');
+                    btnB.className = 'btn-load btn-load-b';
+                    btnB.textContent = 'LOAD B';
+                    btnB.addEventListener('click', () => loadFromDjCrate(genreName, index, 'b'));
+                    
+                    btnContainer.appendChild(btnA);
+                    btnContainer.appendChild(btnB);
+                    
+                    item.appendChild(titleContainer);
+                    item.appendChild(btnContainer);
+                    
+                    trackContainer.appendChild(item);
+                });
+            }
+        }
+
+        function loadFromDjCrate(genre, index, deckId) {
+            const track = musicRepository[genre].tracks[index];
+            loadDjTrack(deckId, track.url, track.title, track.artist);
+
+            decks[deckId].ui.bpmDisplay.textContent = "CALC...";
+            
+            if (track.isLocal && track.fileRef) {
+                const reader = new FileReader();
+                reader.onload = async function(ev) {
+                    const detectedBpm = await calculateBPM(ev.target.result);
+                    decks[deckId].baseBpm = detectedBpm;
+                    decks[deckId].ui.tempo.dispatchEvent(new Event('input')); 
+                };
+                reader.readAsArrayBuffer(track.fileRef);
+            } else {
+                fetchAndCalculateBPM(track.url, deckId);
+            }
+        }
+
+        // --- BPM Calculator ---
+        async function calculateBPM(arrayBuffer) {
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const buffer = await ctx.decodeAudioData(arrayBuffer);
+                const data = buffer.getChannelData(0); 
+                let max = 0;
+                for (let i = 0; i < data.length; i += 100) { if (data[i] > max) max = data[i]; }
+                const threshold = max * 0.85; let peaks = []; const skipSamples = buffer.sampleRate / 3; 
+                for (let i = 0; i < data.length; i++) { if (data[i] > threshold) { peaks.push(i); i += skipSamples; } }
+                if (peaks.length < 2) return 120;
+                let intervals = [];
+                for (let i = 1; i < peaks.length; i++) intervals.push(peaks[i] - peaks[i-1]);
+                intervals.sort((a,b) => a-b);
+                const medianInterval = intervals[Math.floor(intervals.length / 2)];
+                let bpm = Math.round(60 / (medianInterval / buffer.sampleRate));
+                while(bpm < 70) bpm *= 2; while(bpm > 180) bpm /= 2;
+                return Math.round(bpm);
+            } catch(e) { return 120; }
+        }
+
+        document.getElementById('dj-crate-upload').addEventListener('change', (e) => {
+            const files = Array.from(e.target.files);
+            files.forEach(file => {
+                if (file.type.startsWith('audio/')) {
+                    const url = URL.createObjectURL(file);
+                    let fallbackTitle = file.name.replace(/\.[^/.]+$/, "");
+
+                    if (window.jsmediatags) {
+                        window.jsmediatags.read(file, {
+                            onSuccess: function(tag) {
+                                let genre = tag.tags.genre || "Local Uploads";
+                                let artist = tag.tags.artist || "Local Artist";
+                                let title = tag.tags.title || fallbackTitle;
+                                processLocalUpload(file, url, title, artist, genre);
+                            },
+                            onError: function(error) {
+                                console.warn("Tag read error, using defaults:", error);
+                                processLocalUpload(file, url, fallbackTitle, "Local Artist", "Local Uploads");
+                            }
+                        });
+                    } else {
+                        processLocalUpload(file, url, fallbackTitle, "Local Artist", "Local Uploads");
+                    }
+                }
+            });
+        });
+
+        function processLocalUpload(file, url, title, artist, genre) {
+            genre = genre.trim();
+            if (!genre) genre = "Local Uploads";
+            if (!window.allowedDjGenres.includes(genre)) window.allowedDjGenres.push(genre);
+            if (!musicRepository[genre]) {
+                musicRepository[genre] = {
+                    icon: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>`,
+                    tracks: []
+                };
+            }
+            musicRepository[genre].tracks.unshift({ title, artist, url, isLocal: true, fileRef: file });
+            window.openDjGenres.add(genre);
+            debouncedRenderDjCrate();
+        }
+
+        function loadDjTrack(id, url, title, artist) {
+            const deck = decks[id];
+            deck.url = url; deck.audio.src = url; deck.cuePoint = 0;
+            deck.ui.title.textContent = title; deck.ui.artist.textContent = artist;
+            deck.audio.pause(); deck.isPlaying = false;
+            deck.ui.tempo.value = 0; deck.audio.playbackRate = 1;
+            
+            // Reset Loops when changing tracks
+            deck.loop.active = false;
+            deck.loop.in = null;
+            deck.loop.out = null;
+            deck.ui.btnLoopIn.classList.remove('active');
+            deck.ui.btnLoopOut.classList.remove('active');
+            deck.ui.btnLoopExit.style.display = 'none';
+
+            updateDjTransportUI(id);
+        }
+
+        // --- DJ Keyboard Shortcuts ---
+        window.addEventListener('keydown', (e) => {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+            if (e.repeat) return;
+
+            const key = e.key.toLowerCase();
+            
+            // Sampler Triggers
+            if (samplers[key]) {
+                playSample(key);
+            }
+
+            // Transport Triggers
+            if (key === 'a' && decks.a.url) {
+                toggleDjPlay('a');
+                decks.a.ui.playBtn.style.transform = 'scale(0.85)';
+                setTimeout(() => decks.a.ui.playBtn.style.transform = 'scale(1)', 150);
+            } else if (key === 'd' && decks.b.url) {
+                toggleDjPlay('b');
+                decks.b.ui.playBtn.style.transform = 'scale(0.85)';
+                setTimeout(() => decks.b.ui.playBtn.style.transform = 'scale(1)', 150);
+            }
+        });
+
+        // --- DJ Transport & Scratching ---
+        function toggleDjPlay(id) {
+            const deck = decks[id]; if (!deck.url) return;
+            if (deck.isPlaying) { deck.audio.pause(); deck.isPlaying = false; } else { deck.audio.play(); deck.isPlaying = true; }
+            updateDjTransportUI(id);
+        }
+        function jumpToDjCue(id, playHeld = false) {
+            const deck = decks[id]; if (!deck.url) return;
+            deck.audio.pause(); deck.audio.currentTime = deck.cuePoint;
+            if (playHeld) { deck.audio.play(); deck.isPlaying = true; updateDjTransportUI(id); }
+        }
+        function releaseDjCue(id) {
+            const deck = decks[id]; if (!deck.url) return;
+            deck.audio.pause(); deck.audio.currentTime = deck.cuePoint; deck.isPlaying = false; updateDjTransportUI(id);
+        }
+        function updateDjTransportUI(id) {
+            const deck = decks[id];
+            if (deck.isPlaying) {
+                deck.ui.playBtn.classList.add('active'); deck.ui.playBtn.innerHTML = iconPauseSmall;
+                deck.ui.jogRing.style.animationPlayState = 'running';
+            } else {
+                deck.ui.playBtn.classList.remove('active'); deck.ui.playBtn.innerHTML = iconPlaySmall;
+                deck.ui.jogRing.style.animationPlayState = 'paused';
+            }
+        }
+        
+        function updateDjProgress(id) {
+            const deck = decks[id]; if (isNaN(deck.audio.duration)) return;
+            deck.ui.timeCur.textContent = formatTime(deck.audio.currentTime);
+            
+            // --- AUTO DJ TRIGGER ---
+            if (isAutoDjActive && !autoBlendActive && deck.isPlaying) {
+                const remaining = deck.audio.duration - deck.audio.currentTime;
+                const currentFade = parseFloat(crossfaderInput.value);
+                const isActiveDeck = (id === 'a' && currentFade < 0.5) || (id === 'b' && currentFade > 0.5) || (currentFade === 0.5);
+                
+                if (isActiveDeck && remaining <= 6.8 && remaining > 0.5) {
+                    triggerAutoBlend();
+                }
+            }
+        }
+
+        function setupDjScrubbing(id) {
+            const deck = decks[id]; const wheel = document.getElementById(`jog-${id}`);
+            let isDragging = false, lastAngle = 0;
+            let lastX = 0, lastY = 0, isVerticalScratching = false, wasPlaying = false, sfxCooldown = 0;
+
+            const getAngle = (clientX, clientY) => {
+                const rect = wheel.getBoundingClientRect(); return Math.atan2(clientY - (rect.top + rect.height/2), clientX - (rect.left + rect.width/2));
+            };
+
+            const startDrag = (e) => { 
+                isDragging = true; 
+                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                lastX = clientX; lastY = clientY;
+                lastAngle = getAngle(clientX, clientY); 
+                isVerticalScratching = false; wasPlaying = deck.isPlaying; sfxCooldown = 0;
+            };
+            const endDrag = () => { 
+                if(isDragging) { 
+                    isDragging = false; 
+                    if (isVerticalScratching && wasPlaying) deck.audio.play().catch(()=>{});
+                    isVerticalScratching = false;
+                }
+            };
+            const onDrag = (e) => {
+                if (!isDragging || !deck.url || isNaN(deck.audio.duration)) return;
+                e.preventDefault();
+                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                const dx = clientX - lastX, dy = clientY - lastY;
+                lastX = clientX; lastY = clientY;
+
+                const currentAngle = getAngle(clientX, clientY);
+                let diff = currentAngle - lastAngle;
+                if (diff > Math.PI) diff -= Math.PI * 2; if (diff < -Math.PI) diff += Math.PI * 2;
+                
+                if (sfxCooldown > 0) sfxCooldown--;
+
+                if (Math.abs(dy) > 5 && Math.abs(dy) > Math.abs(dx) * 1.5) {
+                    if (!isVerticalScratching) { isVerticalScratching = true; if (deck.isPlaying) deck.audio.pause(); }
+                    if (sfxCooldown <= 0) { playSample('q'); sfxCooldown = 20; }
+                } else if (diff < -0.15 && !isVerticalScratching) { 
+                    if (sfxCooldown <= 0) { playSample('w'); sfxCooldown = 30; }
+                }
+
+                // 1.5 Rotations = Full Track Length for high-speed precision scrubbing
+                const trackDuration = deck.audio.duration;
+                if (!isNaN(trackDuration) && trackDuration > 0) {
+                    const scrubAmount = (diff / (Math.PI * 2)) * (trackDuration / 1.5);
+                    const newTime = deck.audio.currentTime + scrubAmount;
+                    
+                    // Foolproof clamping to prevent breaking the audio API boundaries
+                    deck.audio.currentTime = Math.max(0, Math.min(newTime, trackDuration - 0.1));
+                }
+
+                lastAngle = currentAngle; updateDjProgress(id);
+            };
+
+            wheel.addEventListener('mousedown', startDrag); window.addEventListener('mouseup', endDrag); window.addEventListener('mousemove', onDrag);
+            wheel.addEventListener('touchstart', startDrag, {passive: true}); window.addEventListener('touchend', endDrag); window.addEventListener('touchmove', onDrag, {passive: false});
+        }
+
+        // --- Drop Master AI Engine & Pulse UI ---
+        function processDropMaster() {
+            if (!audioCtx || audioCtx.state !== 'running') return;
+
+            ['a', 'b'].forEach(id => {
+                const deck = decks[id];
+                if (!deck.isPlaying) {
+                    deck.ui.panel.style.boxShadow = '';
+                    deck.ui.panel.style.borderColor = '';
+                    return;
+                }
+
+                const data = id === 'a' ? dataA : dataB;
+                
+                // Isolate Frequencies (1024 FFT -> 512 bins -> ~43Hz per bin)
+                let bass = 0, mid = 0;
+                for(let i=1; i<=4; i++) bass += data[i]; bass /= 4;       // 43Hz - 172Hz
+                for(let i=5; i<=60; i++) mid += data[i]; mid /= 56;       // 215Hz - 2580Hz
+
+                // 🌟 Pulse UI Logic (Audio Reactive) 🌟
+                const bassEnergy = Math.min(1, bass / 255);
+                const color = id === 'a' ? '217, 70, 239' : '34, 211, 238'; 
+                const shadowPulse = bassEnergy * 30; 
+                const borderPulse = 0.2 + (bassEnergy * 0.8);
+                
+                deck.ui.panel.style.boxShadow = `0 0 ${shadowPulse}px rgba(${color}, ${bassEnergy * 0.5})`;
+                deck.ui.panel.style.borderColor = `rgba(${color}, ${borderPulse})`;
+
+
+                // AI Logic only runs if Drop Master is active
+                if (!isDropMasterActive) return;
+                
+                const state = dropState[id];
+
+                // Smooth Rolling Averages (EMA)
+                state.shortE = (state.shortE * 0.84) + (bass * 0.16);
+                state.longE  = (state.longE * 0.996) + (bass * 0.004);
+
+                // Drop Detection Algorithm
+                const ratio = state.shortE / (state.longE + 0.01);
+                
+                if (ratio > 2.5 && state.longE > 10 && state.timer <= 0) {
+                    state.active = true;
+                    state.timer = 60 * 8; // Hold drop EQ parameters for exactly 8 seconds
+                    deck.ui.eqSection.classList.add('drop-active'); // Visually highlight the EQ section
+                }
+
+                // "Heavy but Smooth" EQ Automation
+                if (state.timer > 0) {
+                    state.timer--;
+                    // The Drop is Live
+                    state.targetL = 3.5;
+                    state.targetM = -1.5;
+                    state.targetH = -2.0;
+                } else {
+                    state.active = false;
+                    deck.ui.eqSection.classList.remove('drop-active');
+                    // Auto-Tuner (AGC mode)
+                    state.targetL = 0;
+                    state.targetH = 0;
+                    state.targetM = mid > 160 ? -1.0 : 0; // Gently dip harsh mids
+                }
+
+                // Move ghost faders smoothly
+                const ease = 0.05;
+                let curH = parseFloat(deck.ui.eqH.value);
+                let curM = parseFloat(deck.ui.eqM.value);
+                let curL = parseFloat(deck.ui.eqL.value);
+
+                let newH = curH + (state.targetH - curH) * ease;
+                let newM = curM + (state.targetM - curM) * ease;
+                let newL = curL + (state.targetL - curL) * ease;
+
+                // Directly manipulate the DOM faders and Audio nodes
+                deck.ui.eqH.value = newH; deck.nodes.high.gain.value = newH;
+                deck.ui.eqM.value = newM; deck.nodes.mid.gain.value = newM;
+                deck.ui.eqL.value = newL; deck.nodes.low.gain.value = newL;
+            });
+        }
+
+        // --- Visualizer Rendering ---
+        const visCanvas = document.getElementById('master-visualizer');
+        const visCtx = visCanvas.getContext('2d');
+        function resizeVisualizer() { visCanvas.width = visCanvas.clientWidth; visCanvas.height = visCanvas.clientHeight; }
+        window.addEventListener('resize', resizeVisualizer); resizeVisualizer();
+
+        function drawJogScreen(ctx, deck, dataArr, color) {
+            const width = ctx.canvas.width;
+            const height = ctx.canvas.height;
+            ctx.clearRect(0, 0, width, height);
+            
+            const cx = width / 2;
+            const cy = height / 2;
+            const trackRadius = (width / 2) - 4; // Dynamically scale to stay perfectly inside the rim
+
+            if (!isNaN(deck.audio.duration) && deck.audio.duration > 0) {
+                const progress = deck.audio.currentTime / deck.audio.duration;
+                ctx.beginPath(); ctx.arc(cx, cy, trackRadius, -Math.PI/2, (-Math.PI/2) + (progress * Math.PI * 2));
+                ctx.strokeStyle = color; ctx.lineWidth = 3; ctx.stroke();
+            }
+            if (dataArr) {
+                const r = 14; 
+                // Draw precisely 64 lines for the Jog Wheel (skipping extra bins from the high-res 1024 analyzer)
+                const step = Math.max(2, Math.floor(dataArr.length / 64)); 
+                for (let i = 0; i < dataArr.length; i+=step) {
+                    const val = dataArr[i] / 255; const length = val * 12; 
+                    const angle = (i / dataArr.length) * Math.PI * 2 - Math.PI/2;
+                    ctx.beginPath(); ctx.moveTo(cx + Math.cos(angle) * r, cy + Math.sin(angle) * r);
+                    ctx.lineTo(cx + Math.cos(angle) * (r + length), cy + Math.sin(angle) * (r + length));
+                    ctx.strokeStyle = `rgba(255,255,255, ${val + 0.2})`; ctx.lineWidth = 1; ctx.stroke();
+                }
+            }
+        }
+
+        function drawVisualizer() {
+            requestAnimationFrame(drawVisualizer);
+            if (!audioCtx || audioCtx.state !== 'running') return;
+
+            // Fetch frequency data
+            analyzer.getByteFrequencyData(dataArray);
+            if (decks.a.isPlaying || decks.b.isPlaying) {
+                analyzerA.getByteFrequencyData(dataA);
+                analyzerB.getByteFrequencyData(dataB);
+                
+                // Trigger AI Drop Master processing & Audio Reactive Pulse
+                processDropMaster();
+                
+                // Handle Live Looper Constraints (60fps precision polling)
+                ['a', 'b'].forEach(id => {
+                    const deck = decks[id];
+                    if (deck.loop.active && deck.loop.out !== null) {
+                        if (deck.audio.currentTime >= deck.loop.out) {
+                            deck.audio.currentTime = deck.loop.in;
+                        }
+                    }
+                });
+            } else {
+                // If neither deck is playing, ensure glows fade out
+                decks.a.ui.panel.style.boxShadow = ''; decks.a.ui.panel.style.borderColor = '';
+                decks.b.ui.panel.style.boxShadow = ''; decks.b.ui.panel.style.borderColor = '';
+            }
+
+            // Draw Master Bar Visualizer
+            visCtx.clearRect(0, 0, visCanvas.width, visCanvas.height);
+            const barWidth = (visCanvas.width / analyzer.frequencyBinCount) * 2.5;
+            let barHeight, x = 0;
+            for(let i = 0; i < analyzer.frequencyBinCount; i++) {
+                barHeight = dataArray[i] / 2; 
+                const r = 217 - (i * 2); const g = 70 + (i * 2); const b = 239;
+                visCtx.fillStyle = `rgba(${r},${g},${b}, 0.8)`;
+                visCtx.fillRect(x, visCanvas.height - barHeight, barWidth, barHeight);
+                x += barWidth + 1;
+            }
+
+            drawJogScreen(decks.a.ui.jogCanvas.getContext('2d'), decks.a, dataA, '#d946ef');
+            drawJogScreen(decks.b.ui.jogCanvas.getContext('2d'), decks.b, dataB, '#22d3ee');
+        }
+
+        // Initialize Library UIs
+        renderDjCrate();
+        setInterval(() => { document.getElementById('clock').innerText = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}); }, 1000);
+
+        // Synapse Engine Visuals
+        const synCanvas = document.getElementById('synapse-canvas');
+        const synCtx = synCanvas.getContext('2d');
+        let synWidth, synHeight;
+        let synNodes = [];
+        let synSignals = [];
+        const maxNodes = 60; 
+        const connectionDistance = 150;
+        const synColors = ['#9333ea', '#d946ef', '#22d3ee', '#a855f7'];
+
+        function initSynapse() {
+            synWidth = synCanvas.width = window.innerWidth;
+            synHeight = synCanvas.height = window.innerHeight;
+            synNodes = [];
+            synSignals = [];
+            for (let i = 0; i < maxNodes; i++) {
+                synNodes.push(new SynNode());
+            }
+        }
+
+        window.addEventListener('resize', () => {
+            let oldWidth = synWidth;
+            let oldHeight = synHeight;
+            
+            synWidth = synCanvas.width = window.innerWidth;
+            synHeight = synCanvas.height = window.innerHeight;
+            
+            if (oldWidth > 0 && oldHeight > 0 && synNodes.length > 0) {
+                let wRatio = synWidth / oldWidth;
+                let hRatio = synHeight / oldHeight;
+                synNodes.forEach(n => { n.x *= wRatio; n.y *= hRatio; });
+            }
+        });
+
+        class SynNode {
+            constructor() {
+                this.x = Math.random() * synWidth;
+                this.y = Math.random() * synHeight;
+                this.vx = (Math.random() - 0.5) * 0.4;
+                this.vy = (Math.random() - 0.5) * 0.4;
+                this.radius = Math.random() * 2 + 1;
+                this.color = synColors[Math.floor(Math.random() * synColors.length)];
+            }
+            update() {
+                this.x += this.vx; this.y += this.vy;
+                if (this.x <= 0 || this.x >= synWidth) this.vx *= -1;
+                if (this.y <= 0 || this.y >= synHeight) this.vy *= -1;
+                if (this.x < 0) this.x = 0; if (this.x > synWidth) this.x = synWidth;
+                if (this.y < 0) this.y = 0; if (this.y > synHeight) this.y = synHeight;
+            }
+            draw() {
+                synCtx.beginPath();
+                synCtx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                synCtx.fillStyle = this.color;
+                synCtx.fill();
+            }
+        }
+
+        setInterval(() => {
+            if (synNodes.length < 2) return;
+            let n1 = synNodes[Math.floor(Math.random() * synNodes.length)];
+            let n2 = synNodes[Math.floor(Math.random() * synNodes.length)];
+            if (n1 !== n2) {
+                let dx = n1.x - n2.x; let dy = n1.y - n2.y;
+                if (Math.sqrt(dx * dx + dy * dy) < connectionDistance * 1.5 && synSignals.length < 3) {
+                    synSignals.push({ x: n1.x, y: n1.y, target: n2, progress: 0, color: n1.color });
+                }
+            }
+        }, 300);
+
+        function animateSynapse() {
+            synCtx.clearRect(0, 0, synWidth, synHeight);
+            synNodes.forEach(node => { node.update(); node.draw(); });
+
+            synCtx.lineWidth = 1;
+            for (let i = 0; i < synNodes.length; i++) {
+                for (let j = i + 1; j < synNodes.length; j++) {
+                    let dx = synNodes[i].x - synNodes[j].x;
+                    let dy = synNodes[i].y - synNodes[j].y;
+                    let dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist < connectionDistance) {
+                        synCtx.beginPath();
+                        synCtx.moveTo(synNodes[i].x, synNodes[i].y);
+                        synCtx.lineTo(synNodes[j].x, synNodes[j].y);
+                        let alpha = 1 - (dist / connectionDistance);
+                        synCtx.strokeStyle = `rgba(217, 70, 239, ${alpha * 0.3})`;
+                        synCtx.stroke();
+                    }
+                }
+            }
+
+            for (let i = synSignals.length - 1; i >= 0; i--) {
+                let s = synSignals[i];
+                s.progress += 0.015;
+                if (s.progress >= 1) { synSignals.splice(i, 1); continue; }
+                let curX = s.x + (s.target.x - s.x) * s.progress;
+                let curY = s.y + (s.target.y - s.y) * s.progress;
+
+                synCtx.beginPath();
+                synCtx.arc(curX, curY, 2.5, 0, Math.PI * 2);
+                synCtx.fillStyle = '#ffffff';
+                synCtx.shadowBlur = 10;
+                synCtx.shadowColor = s.color;
+                synCtx.fill();
+                synCtx.shadowBlur = 0;
+            }
+            requestAnimationFrame(animateSynapse);
+        }
+
+        initSynapse();
+        animateSynapse();
     </script>
 </body>
 </html>
